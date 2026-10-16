@@ -12,7 +12,7 @@ test('two users join, capacity starts shared race, private answers and host auth
  const made=await post('/api/rooms',{keyword:'개발',name:'Host',capacity:2,count:4});assert.equal(made.status,201);const host=made.data;
  let state=await snapshot(host);assert.equal(state.phase,'waiting');assert.equal(state.question,null);assert.ok(!JSON.stringify(state).includes(host.token));
  const joined=await post(`/api/rooms/${host.code}/join`,{name:'Friend'});assert.equal(joined.status,200);const guest=joined.data;
- state=await snapshot(host);assert.equal(state.phase,'playing');assert.equal(state.players.length,2);assert.equal(state.answer,null);assert.equal(state.question.answer,undefined);
+ state=await snapshot(host);assert.equal(state.phase,'countdown');assert.equal(state.question,null);assert.equal((await post(`/api/rooms/${host.code}/answer`,{token:host.token,answer:0})).status,400);const countdown=state.deadline;assert.equal((await snapshot(guest)).deadline,countdown);await post(`/api/rooms/${host.code}/start`,{token:host.token});assert.equal((await snapshot(host)).deadline,countdown);await waitForPlaying(host);state=await snapshot(host);assert.equal(state.phase,'playing');assert.equal(state.players.length,2);assert.equal(state.answer,null);assert.equal(state.question.answer,undefined);
  assert.equal((await post(`/api/rooms/${host.code}/start`,{token:guest.token})).status,400);
  assert.equal((await post(`/api/rooms/${host.code}/answer`,{token:host.token,answer:9})).status,400);
  assert.equal((await post(`/api/rooms/${host.code}/answer`,{token:host.token,answer:0})).status,200);
@@ -21,7 +21,7 @@ test('two users join, capacity starts shared race, private answers and host auth
  state=await snapshot(guest);assert.equal(state.phase,'reveal');assert.ok(Number.isInteger(state.answer));assert.equal(state.yourAnswer,1);
  assert.equal((await post(`/api/rooms/${host.code}/join`,{name:'Late'})).status,400);
 });
-test('host can manually start before capacity',async()=>{const {data:s}=await post('/api/rooms',{keyword:'과학',name:'Solo',capacity:8,count:4});assert.equal((await post(`/api/rooms/${s.code}/start`,{token:s.token})).status,200);assert.equal((await snapshot(s)).phase,'playing');});
+test('host can manually start before capacity',async()=>{const {data:s}=await post('/api/rooms',{keyword:'과학',name:'Solo',capacity:8,count:4});assert.equal((await post(`/api/rooms/${s.code}/start`,{token:s.token})).status,200);assert.equal((await snapshot(s)).phase,'countdown');await waitForPlaying(s);assert.equal((await snapshot(s)).phase,'playing');});
 
 test('polling transport authenticates and exposes shared state without secret answers',async()=>{
  const {data:s}=await post('/api/rooms',{keyword:'상식',name:'Poll runner',capacity:4,count:4});
@@ -49,7 +49,7 @@ test('custom time, authenticated chat, isolation and server-side speed scores',a
  assert.equal((await post(`/api/rooms/${host.code}/chat`,{token:host.token,text:'spam'})).status,400);
  const {data:other}=await post('/api/rooms',{keyword:'스포츠'});assert.deepEqual((await snapshot(other)).messages,[]);assert.equal((await snapshot(other)).timeLimit,10);
  await post(`/api/rooms/${host.code}/start`,{token:host.token});
- const q=await snapshot(host);assert.ok(q.deadline-Date.now()<=5000&&q.deadline-Date.now()>4000);
+ await waitForPlaying(host);const q=await snapshot(host);assert.ok(q.deadline-Date.now()<=5000&&q.deadline-Date.now()>4000);
  const answer=makeQuestions('음악',8).find(x=>x.text===q.question.text).answer;
  await post(`/api/rooms/${host.code}/answer`,{token:host.token,answer,elapsedMs:0});
  await new Promise(r=>setTimeout(r,150));
@@ -58,3 +58,5 @@ test('custom time, authenticated chat, isolation and server-side speed scores',a
  const first=result.players.find(p=>p.id===result.host),second=result.players.find(p=>p.id!==result.host);
  assert.ok(first.score>second.score);assert.ok(first.score<=1500&&second.score>=1000);assert.equal(first.correct,1);assert.equal(first.lastPoints,first.score);
 });
+
+async function waitForPlaying(session){const end=Date.now()+7000;while(Date.now()<end){const s=await snapshot(session);if(s.phase==='playing')return;await new Promise(resolve=>setTimeout(resolve,50));}assert.fail('Countdown did not start the game');}
