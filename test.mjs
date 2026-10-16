@@ -1,7 +1,7 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {makeQuestions} from './questions.mjs';
+import {makeQuestions,topics,resolveTopic} from './questions.mjs';
 let proc;const base='http://127.0.0.1:3198';
 const post=async(path,body)=>{const r=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:r.status,data:await r.json()};};
 before(async()=>{proc=spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'3198'}});await new Promise((resolve,reject)=>{proc.stdout.once('data',resolve);proc.once('error',reject);proc.once('exit',()=>reject(Error('server exited')));});});
@@ -50,7 +50,7 @@ test('custom time, authenticated chat, isolation and server-side speed scores',a
  const {data:other}=await post('/api/rooms',{keyword:'스포츠'});assert.deepEqual((await snapshot(other)).messages,[]);assert.equal((await snapshot(other)).timeLimit,10);
  await post(`/api/rooms/${host.code}/start`,{token:host.token});
  await waitForPlaying(host);const q=await snapshot(host);assert.ok(q.deadline-Date.now()<=5000&&q.deadline-Date.now()>4000);
- const answer=makeQuestions('음악',8).find(x=>x.text===q.question.text).answer;
+ const bankQuestion=makeQuestions('음악',12).find(x=>x.text===q.question.text);const answer=q.question.options.indexOf(bankQuestion.options[bankQuestion.answer]);
  await post(`/api/rooms/${host.code}/answer`,{token:host.token,answer,elapsedMs:0});
  await new Promise(r=>setTimeout(r,150));
  await post(`/api/rooms/${host.code}/answer`,{token:guest.token,answer,elapsedMs:0});
@@ -60,3 +60,24 @@ test('custom time, authenticated chat, isolation and server-side speed scores',a
 });
 
 async function waitForPlaying(session){const end=Date.now()+7000;while(Date.now()<end){const s=await snapshot(session);if(s.phase==='playing')return;await new Promise(resolve=>setTimeout(resolve,50));}assert.fail('Countdown did not start the game');}
+
+test('all 15 categories contain 12 distinct valid questions and stable answers after shuffling',()=>{
+ assert.equal(topics.length,15);const texts=new Set();
+ for(const topic of topics){
+  const first=makeQuestions(topic,12);assert.equal(first.length,12);assert.equal(new Set(first.map(q=>q.text)).size,12);
+  for(const q of first){assert.ok(q.text.trim());assert.equal(q.options.length,4);assert.equal(new Set(q.options).size,4);assert.ok(Number.isInteger(q.answer)&&q.answer>=0&&q.answer<4);assert.ok(!texts.has(q.text));texts.add(q.text);}
+  for(let pass=0;pass<4;pass++)for(const q of makeQuestions(topic,12)){const original=first.find(x=>x.text===q.text);assert.equal(q.options[q.answer],original.options[original.answer]);}
+  assert.equal(resolveTopic(topic),topic);
+ }
+ assert.equal(texts.size,180);assert.equal(resolveTopic('영어'),'언어');assert.equal(resolveTopic('축구'),'스포츠');assert.throws(()=>makeQuestions('수학',13));
+});
+test('100 player capacity, full-room rejection and twelve-question creation',async()=>{
+ for(const capacity of [1,101,2.5,'invalid'])assert.equal((await post('/api/rooms',{keyword:'환경',capacity})).status,400);
+ const {data:host,status}=await post('/api/rooms',{keyword:'환경',capacity:100,count:12});assert.equal(status,201);
+ for(let i=2;i<=99;i++)assert.equal((await post(`/api/rooms/${host.code}/join`,{name:`runner ${i}`})).status,200);
+ let state=await snapshot(host);assert.equal(state.players.length,99);assert.equal(state.phase,'waiting');assert.equal(state.total,12);
+ assert.equal((await post(`/api/rooms/${host.code}/join`,{name:'runner 100'})).status,200);
+ state=await snapshot(host);assert.equal(state.players.length,100);assert.equal(state.capacity,100);assert.equal(state.phase,'countdown');
+ assert.equal((await post(`/api/rooms/${host.code}/join`,{name:'runner 101'})).status,400);
+ const list=await (await fetch(base+'/api/rooms')).json();assert.ok(!list.some(r=>r.code===host.code));
+});

@@ -2,7 +2,8 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {randomBytes, randomUUID} from 'node:crypto';
 import {scoreAnswer} from './scoring.mjs';
-import {makeQuestions} from './questions.mjs';
+import {questionCounts} from './public/topics.js';
+import {makeQuestions,resolveTopic} from './questions.mjs';
 const rooms = new Map();
 const colors = ['#d9ff43','#b9a7ff','#ff9b75','#91d7f3','#f3a7d6','#7bddb1'];
 const publicPlayer = p => ({id:p.id,name:p.name,color:p.color,score:p.score,correct:p.correct,lastPoints:p.lastPoints,online:p.streams.size>0||Date.now()-(p.lastSeen||0)<5000,answered:p.answer!==null});
@@ -25,9 +26,9 @@ const server=http.createServer(async(req,res)=>{
  if(url.pathname==='/api/health')return send(res,200,{ok:true});
  if(url.pathname==='/api/rooms'&&req.method==='GET')return send(res,200,[...rooms.values()].filter(r=>r.phase==='waiting').map(r=>({code:r.code,title:r.title,keyword:r.keyword,count:r.players.size,capacity:r.capacity,total:r.questions.length,timeLimit:r.timeLimit})));
  if(url.pathname==='/api/rooms'&&req.method==='POST'){
-  const b=await body(req); const timeLimit=b.timeLimit===undefined?10:Number(b.timeLimit);if(![5,10,15,20,30].includes(timeLimit))throw Error('제한시간은 5·10·15·20·30초 중 선택해 주세요.'); const questions=makeQuestions(String(b.keyword||''),[4,6,8].includes(Number(b.count))?Number(b.count):6);
+  const b=await body(req); const capacity=b.capacity===undefined?4:Number(b.capacity);if(!Number.isInteger(capacity)||capacity<2||capacity>100)throw Error('정원은 2~100명으로 설정해 주세요.'); const timeLimit=b.timeLimit===undefined?10:Number(b.timeLimit);if(![5,10,15,20,30].includes(timeLimit))throw Error('제한시간은 5·10·15·20·30초 중 선택해 주세요.'); const questions=makeQuestions(String(b.keyword||''),questionCounts.includes(Number(b.count))?Number(b.count):6);
   let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(code));
-  const r={code,title:String(b.title||`${b.keyword} 한 판 달려!`).slice(0,50),keyword:String(b.keyword).slice(0,30),capacity:Math.min(20,Math.max(2,Number(b.capacity)||4)),questions,timeLimit,messages:[],phase:'waiting',index:0,players:new Map(),created:Date.now()};
+  const r={code,title:String(b.title||`${b.keyword} 한 판 달려!`).slice(0,50),keyword:resolveTopic(b.keyword),capacity:capacity,questions,timeLimit,messages:[],phase:'waiting',index:0,players:new Map(),created:Date.now()};
   const p=addPlayer(r,b.name);r.host=p.id;rooms.set(code,r);return send(res,201,{code,token:p.token});
  }
  const match=url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{6})\/(join|events|state|start|answer|chat)$/);
@@ -61,7 +62,7 @@ const server=http.createServer(async(req,res)=>{
   }return send(res,200,{ok:true});
  }
  if(url.pathname.startsWith('/api/'))return send(res,404,{error:'찾을 수 없는 요청입니다.'});
- const files={'/':'index.html','/app.js':'app.js','/style.css':'style.css','/arcade.css':'arcade.css'};const file=files[url.pathname]||'index.html';const content=await readFile(new URL(`./public/${file}`,import.meta.url));res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html'});res.end(content);
+ const files={'/':'index.html','/app.js':'app.js','/topics.js':'topics.js','/style.css':'style.css','/arcade.css':'arcade.css'};const file=files[url.pathname]||'index.html';const content=await readFile(new URL(`./public/${file}`,import.meta.url));res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html'});res.end(content);
  }catch(e){send(res,400,{error:e.message});}
 });
 setInterval(()=>{for(const [code,r] of rooms)if(Date.now()-r.created>6*60*60*1000){clearTimeout(r.timer);for(const p of r.players.values())for(const s of p.streams)s.end();rooms.delete(code);}},60000).unref();
