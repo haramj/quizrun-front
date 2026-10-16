@@ -32,3 +32,29 @@ test('polling transport authenticates and exposes shared state without secret an
  assert.ok(!JSON.stringify(state).includes(s.token));
  assert.equal((await fetch(`${base}/api/health`)).status,200);
 });
+
+test('new topics have eight valid unique questions',()=>{for(const topic of ['스포츠','영화','음악']){const qs=makeQuestions(topic,8);assert.equal(qs.length,8);assert.equal(new Set(qs.map(q=>q.text)).size,8);assert.ok(qs.every(q=>q.options.length===4&&q.options[q.answer]));}});
+test('speed scoring rewards fast answers with bounded bonus',async()=>{const {scoreAnswer}=await import('./scoring.mjs');assert.equal(scoreAnswer(0,10000),1500);assert.equal(scoreAnswer(5000,10000),1250);assert.equal(scoreAnswer(10000,10000),1000);assert.ok(scoreAnswer(1000,10000)>scoreAnswer(8000,10000));});
+test('custom time, authenticated chat, isolation and server-side speed scores',async()=>{
+ assert.equal((await post('/api/rooms',{keyword:'음악',timeLimit:1})).status,400);
+ const {data:host}=await post('/api/rooms',{keyword:'음악',capacity:3,count:4,timeLimit:5});
+ const {data:guest}=await post(`/api/rooms/${host.code}/join`,{name:'guest'});
+ assert.equal((await snapshot(host)).timeLimit,5);
+ assert.equal((await post(`/api/rooms/${host.code}/chat`,{token:'wrong',text:'hi'})).status,400);
+ assert.equal((await post(`/api/rooms/${host.code}/chat`,{token:host.token,text:'   '})).status,400);
+ assert.equal((await post(`/api/rooms/${host.code}/chat`,{token:host.token,text:'x'.repeat(201)})).status,400);
+ const message='<script>alert(1)</script> 안녕!';
+ assert.equal((await post(`/api/rooms/${host.code}/chat`,{token:host.token,text:message})).status,200);
+ assert.equal((await snapshot(guest)).messages[0].text,message);
+ assert.equal((await post(`/api/rooms/${host.code}/chat`,{token:host.token,text:'spam'})).status,400);
+ const {data:other}=await post('/api/rooms',{keyword:'스포츠'});assert.deepEqual((await snapshot(other)).messages,[]);assert.equal((await snapshot(other)).timeLimit,10);
+ await post(`/api/rooms/${host.code}/start`,{token:host.token});
+ const q=await snapshot(host);assert.ok(q.deadline-Date.now()<=5000&&q.deadline-Date.now()>4000);
+ const answer=makeQuestions('음악',8).find(x=>x.text===q.question.text).answer;
+ await post(`/api/rooms/${host.code}/answer`,{token:host.token,answer,elapsedMs:0});
+ await new Promise(r=>setTimeout(r,150));
+ await post(`/api/rooms/${host.code}/answer`,{token:guest.token,answer,elapsedMs:0});
+ const result=await snapshot(host);assert.equal(result.phase,'reveal');
+ const first=result.players.find(p=>p.id===result.host),second=result.players.find(p=>p.id!==result.host);
+ assert.ok(first.score>second.score);assert.ok(first.score<=1500&&second.score>=1000);assert.equal(first.correct,1);assert.equal(first.lastPoints,first.score);
+});
