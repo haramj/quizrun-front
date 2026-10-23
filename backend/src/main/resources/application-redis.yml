@@ -1,0 +1,12 @@
+# 서버를 여러 대로 운영할 때의 설정 (수업 Day4: Load Balancer + Auto Scaling + Cloud DB for Cache)
+#   켜는 법: SPRING_PROFILES_ACTIVE=redis   (+ REDIS_HOST, REDIS_PORT, REDIS_PASSWORD 환경변수)
+quizrun:
+  room-store: redis
+
+management:
+  endpoint:
+    health:
+      group:
+        # Redis에 연결되지 않은 서버는 "준비 안 됨"(readiness DOWN). 메모리 모드에는 redis 항목이 없어 여기서만 켠다.
+        readiness:
+          include: readinessState,redis

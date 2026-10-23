@@ -1,0 +1,28 @@
+# QUIZRUN 백엔드를 VM에서 서비스로 돌리는 systemd 유닛 (Docker 없이, 수업의 서버 이미지 + Init Script 방식).
+# 설치: deploy/vm/install-app.sh 가 /etc/systemd/system/quizrun.service 로 복사하고 enable 한다.
+[Unit]
+Description=QUIZRUN backend (Spring Boot)
+After=network-online.target
+Wants=network-online.target
+# 설정 파일이 비어 있으면(= 서버 이미지 안에서, Init Script가 값을 쓰기 전) 시작하지 않는다.
+ConditionFileNotEmpty=/etc/quizrun/quizrun.env
+
+[Service]
+User=quizrun
+Group=quizrun
+WorkingDirectory=/opt/quizrun
+EnvironmentFile=/etc/quizrun/quizrun.env
+Environment=JAVA_OPTS=-XX:MaxRAMPercentage=75
+ExecStart=/bin/sh -c 'exec /usr/bin/java $JAVA_OPTS -jar /opt/quizrun/app.jar'
+Restart=on-failure
+RestartSec=5
+# Spring Boot는 종료 신호(SIGTERM)를 받으면 종료 코드 143으로 끝난다. 이것은 정상 종료다.
+SuccessExitStatus=143
+TimeoutStopSec=40
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
