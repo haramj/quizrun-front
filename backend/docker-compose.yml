@@ -1,0 +1,21 @@
+# 로컬 실행: docker compose up --build  →  http://localhost:3000
+# 저장소 루트의 ../public 을 같은 포트에서 함께 서빙해 프론트+백엔드를 한 번에 확인한다.
+# 클라우드에서는 프론트를 Object Storage 등에서 따로 서빙하므로 이 마운트는 로컬 전용이다.
+services:
+  backend:
+    build: .
+    image: quizrun-back:dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_WEB_RESOURCES_STATIC_LOCATIONS: file:/front/
+    volumes:
+      - ../public:/front:ro
+      - quizrun-data:/app/data      # 문제은행(H2 파일 DB). 컨테이너를 지워도 쌓인 문제는 남는다.
+    restart: unless-stopped
+
+volumes:
+  quizrun-data:
