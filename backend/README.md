@@ -36,7 +36,7 @@ docker compose up --build   # http://localhost:3000  (프론트 포함)
 
 ### 테스트
 
-로컬에 Java가 없어도 컨테이너로 돌릴 수 있습니다. (일반 실행 124개 통과 + 진짜 Redis가 필요한 통합 테스트 11개는 건너뜀, 외부 네트워크·API 호출 없음)
+로컬에 Java가 없어도 컨테이너로 돌릴 수 있습니다. (일반 실행 131개 통과 + 진짜 Redis가 필요한 통합 테스트 11개는 건너뜀, 외부 네트워크·API 호출 없음)
 
 ```bash
 docker run --rm -v "$PWD":/app -v quizrun-gradle-cache:/home/gradle/.gradle -w /app \
@@ -45,7 +45,7 @@ docker run --rm -v "$PWD":/app -v quizrun-gradle-cache:/home/gradle/.gradle -w /
 
 Java 21이 있다면 `gradle test`, 실행은 `gradle bootRun`입니다.
 
-**진짜 Redis로 통합 테스트까지**(락·원자적 저장·서버 2대 시나리오, 총 135개):
+**진짜 Redis로 통합 테스트까지**(락·원자적 저장·서버 2대 시나리오, 총 142개):
 
 ```bash
 docker network create qr-net && docker run -d --name qr-redis --network qr-net redis:7
@@ -85,6 +85,7 @@ docker compose -f docker-compose.scale.yml up --build     # http://localhost:808
 ```
 src/main/java/com/quizrun/room/
 ├── RoomController / RoomService     REST API(프론트 계약) · 게임 규칙 · 상태 전이 · 채점
+├── AvatarService                    JPEG 검증 · 해시 URL · 메모리/Redis 사진 저장 · 만료 정리
 ├── RoomStore                        방 저장소 인터페이스 (find는 복사본, saveIfAbsent·save(XX)·touch)
 │   ├── RedisRoomStore               운영: Cloud DB for Cache(Redis). 방 JSON + TTL + 접속 신호
 │   └── InMemoryRoomStore            로컬·테스트: Redis와 같은 JSON 방식
@@ -115,8 +116,9 @@ docker-compose.scale.yml             서버 2대 + LB + Redis + MySQL 검증 구
 - 100명 방을 폴링하면 읽기 비용이 큽니다(간이 측정 p95 약 340ms, 오류 0건). 부하 테스트로 확인이 필요합니다.
 - 문제은행 DB는 **MySQL 8.0.46 컨테이너에서 실행 검증**했습니다(`DB_URL`만 변경, 신고·관리자 흐름·한글 포함). 다만 **NCP Cloud DB for MySQL 인스턴스는 만들지 않았습니다.** 현재 코드의 DB 스키마(v1)는 수업의 설계 원칙과 어긋나는 부분이 있어 [DB 설계서](docs/database-design.md)의 목표 스키마(v2)로 이행해야 합니다.
 - AI 출제는 근거 검증으로 오류를 크게 줄였지만 **완벽하지 않습니다.** 자료가 틀리면 문제도 틀립니다. 신고 → 자동 제외 → 관리자 복구 루프가 있으나, 로그인이 없어서 **여러 참가자를 만들어 정상 문제를 신고하는 악용은 막지 못합니다.**
-- 프론트에는 아직 **신고 버튼이 없습니다** (API는 준비됨, 사용법은 [API 명세](docs/api.md#post-apiroomscodereport--문제-신고)). 자세한 내용은 [AI 문제 생성 문서](docs/ai-question-generation.md#알려진-한계-솔직하게)를 보세요.
-- 문제 준비는 AI 키워드에서 **15~30초** 걸립니다. 방 생성은 즉시 응답하고 대기실에서 진행되지만, 프론트가 `state.prepare`를 읽어 **"문제 준비 중"과 실패 안내를 표시해야 합니다**([API 명세](docs/api.md#방-생성과-문제-준비-비동기)). 준비 실패는 HTTP 오류가 아니라 `prepare: "failed"`로 전달됩니다.
+- 프론트에서 현재 문제와 종료 후 지난 문제를 신고할 수 있습니다. 신고 창을 연 뒤 다음 문제로 넘어가도 신고 대상은 유지됩니다([API 명세](docs/api.md#post-apiroomscodereport--문제-신고)).
+- 문제 준비는 AI 키워드에서 **15~30초** 걸립니다. 프론트 대기실은 `state.prepare`로 준비 중·실패·완료와 실제 문제 수를 표시합니다. 준비 중 출발을 예약하면 준비 완료 후 자동 카운트다운을 시작합니다([API 명세](docs/api.md#방-생성과-문제-준비-비동기)).
+- 사진은 256px·48KB 이하 JPEG만 받으며, 참가자 토큰으로 이름·사진을 수정할 수 있습니다. `redis` 프로파일에서는 사진도 Redis에 공유합니다. 메모리 모드 재시작 시 방과 사진이 사라집니다. 초대 전용(`friends`) 방은 공개 목록에서 숨기지만 코드로 입장할 수 있습니다.
 - 나무위키는 CC BY-NC-SA(비영리)입니다. 상용으로 가면 `quizrun.sources.namu-enabled=false`로 끄세요.
 - 실시간 동기화는 프론트의 700ms 폴링을 지원합니다. SSE(`/events`)는 아직 구현하지 않았습니다.
 - 사용자 인증과 IP별 생성 제한은 아직 없습니다. 공개 운영 전에 필요합니다.

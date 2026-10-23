@@ -14,6 +14,7 @@ import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -60,23 +61,31 @@ public class RoomService {
     private final QuestionReportService reports;
     private final Clock clock;
     private final Executor preparer;
+    private final AvatarService avatars;
 
     /** preparer: 문제 준비(AI 생성)를 요청 스레드 밖에서 돌리는 실행기. 테스트에서는 동기/수동 실행기를 넣는다. */
     public RoomService(RoomStore store, RoomLocks locks, QuizComposer composer, QuestionReportService reports,
                        Clock clock, @Qualifier("quizPreparer") Executor preparer) {
+        this(store, locks, composer, reports, clock, preparer, new AvatarService(clock));
+    }
+
+    @Autowired
+    public RoomService(RoomStore store, RoomLocks locks, QuizComposer composer, QuestionReportService reports,
+                       Clock clock, @Qualifier("quizPreparer") Executor preparer, AvatarService avatars) {
         this.store = store;
         this.locks = locks;
         this.composer = composer;
         this.reports = reports;
         this.clock = clock;
         this.preparer = preparer;
+        this.avatars = avatars;
     }
 
     // ---- 조회 -------------------------------------------------------------------------
 
     public List<RoomSummary> listWaiting() {
         return store.all().stream()
-                .filter(r -> r.phase == Phase.WAITING && r.prepare != Prepare.FAILED)
+                .filter(r -> r.phase == Phase.WAITING && r.prepare != Prepare.FAILED && !"friends".equals(r.visibility))
                 .map(r -> new RoomSummary(r.code, r.title, r.keyword, r.players.size(), r.capacity,
                         r.total(), r.timeLimit, r.source, r.prepare.name().toLowerCase()))
                 .toList();
@@ -116,6 +125,9 @@ public class RoomService {
 
         int count = b.count() != null && QUESTION_COUNTS.contains(b.count().intValue()) ? b.count().intValue() : 6;
         String keyword = cleanKeyword(b.keyword());
+        String visibility = b.visibility() == null ? "public" : b.visibility();
+        if (!Set.of("public", "friends").contains(visibility)) throw ApiException.badRequest("참가 방식을 확인해 주세요.");
+        AvatarService.Photo photo = avatars.parse(b.avatar());
         String title = b.title() == null || b.title().isBlank() ? keyword + " 한 판 달려!" : b.title();
         title = title.substring(0, Math.min(50, title.length()));
 
@@ -129,6 +141,8 @@ public class RoomService {
         do {
             room = new Room(SecureHexTokens.hex(3).toUpperCase(), title, keyword, capacity, timeLimit, count, now());
             host = addPlayer(room, b.name());
+            host.avatar = avatars.save(photo);
+            room.visibility = visibility;
             room.host = host.id;
             if (quick != null) room.applyQuiz(quick);
             else room.prepare = Prepare.PREPARING; // 느린 경로(AI 생성 15~30초): 방을 먼저 열고 문제는 백그라운드에서 만든다
@@ -194,11 +208,17 @@ public class RoomService {
     }
 
     public JoinResponse join(String code, String name) {
+        return join(code, name, null);
+    }
+
+    public JoinResponse join(String code, String name, String avatar) {
         return locked(code, r -> {
             if (r.prepare == Prepare.FAILED) throw ApiException.badRequest("문제 준비에 실패한 방이에요. 새로운 방에 참여해 주세요.");
             if (r.phase != Phase.WAITING) throw ApiException.badRequest("이미 출발한 레이스예요. 새로운 방에 참여해 주세요.");
             if (r.players.size() >= r.capacity) throw ApiException.badRequest("정원이 가득 찼어요.");
+            AvatarService.Photo photo = avatars.parse(avatar);
             Player p = addPlayer(r, name);
+            p.avatar = avatars.save(photo);
             if (r.players.size() == r.capacity) startCountdown(r);
             return new JoinResponse(r.code, p.token);
         });
@@ -209,6 +229,19 @@ public class RoomService {
             Player p = player(r, token);
             if (!p.id.equals(r.host)) throw ApiException.badRequest("방장만 시작할 수 있어요.");
             startCountdown(r);
+            return null;
+        });
+    }
+
+    public void profile(String code, String token, String name, String avatar) {
+        locked(code, r -> {
+            Player p = player(r, token);
+            String cleaned = name == null ? "" : name.trim();
+            if (cleaned.isEmpty() || cleaned.length() > 16) throw ApiException.badRequest("닉네임은 1~16자로 입력해 주세요.");
+            AvatarService.Photo photo = avatars.parse(avatar);
+            String url = avatars.save(photo);
+            p.name = cleaned;
+            p.avatar = url;
             return null;
         });
     }
@@ -394,7 +427,7 @@ public class RoomService {
         boolean showQuestion = r.phase == Phase.PLAYING || r.phase == Phase.REVEAL;
         Question q = showQuestion ? r.questions.get(r.index) : null;
         List<PublicPlayer> players = r.players.values().stream()
-                .map(p -> new PublicPlayer(p.id, p.name, p.color, p.score, p.correct, p.lastPoints,
+                .map(p -> new PublicPlayer(p.id, p.name, p.avatar, p.color, p.score, p.correct, p.lastPoints,
                         now - Math.max(p.lastSeen, presence.getOrDefault(p.id, 0L)) < ONLINE_WINDOW_MS,
                         p.answer != null))
                 .toList();
@@ -402,7 +435,8 @@ public class RoomService {
                 r.prepareError, r.capacity, r.phase.name().toLowerCase(), r.index, r.total(), r.deadline, r.timeLimit,
                 List.copyOf(r.messages), r.host, me.id, players,
                 q == null ? null : new QuestionView(q.text(), q.options()),
-                r.phase == Phase.REVEAL ? q.answer() : null, me.answer);
+                r.phase == Phase.REVEAL ? q.answer() : null, me.answer,
+                r.visibility, r.requestedCount, r.startRequested);
     }
 
     /** 사용자 키워드를 프롬프트에 넣기 전에 다듬는다: 줄바꿈·제어문자 제거, 공백 정리, 30자 제한. */

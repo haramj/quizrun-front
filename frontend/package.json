@@ -1,1 +1,15 @@
-{"name":"quizrun","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"node --watch server.mjs","start":"node server.mjs","test":"node --test test.mjs quiz-generator.test.mjs crop.test.mjs"},"engines":{"node":">=20.12"}}
+{
+  "name": "quizrun",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test test.mjs quiz-generator.test.mjs crop.test.mjs bridge.test.mjs quiz-state.test.mjs",
+    "start:reference": "node reference-server.mjs"
+  },
+  "engines": {
+    "node": ">=20.12"
+  }
+}
