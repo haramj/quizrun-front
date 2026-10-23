@@ -22,7 +22,7 @@ x-app: &app
     ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     SPRING_WEB_RESOURCES_STATIC_LOCATIONS: file:/front/
   volumes:
-    - ../public:/front:ro
+    - ../frontend/public:/front:ro
   depends_on:
     mysql: { condition: service_healthy }
     redis: { condition: service_healthy }
