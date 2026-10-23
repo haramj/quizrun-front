@@ -5,7 +5,7 @@ import {makeQuestions,topics,resolveTopic} from './questions.mjs';
 import {readFileSync} from 'node:fs';
 let proc;const base='http://127.0.0.1:3198';
 const post=async(path,body)=>{const r=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:r.status,data:await r.json()};};
-before(async()=>{proc=spawn(process.execPath,['server.mjs'],{env:{...process.env,CLOVA_STUDIO_API_KEY:'',PORT:'3198'}});await new Promise((resolve,reject)=>{proc.stdout.once('data',resolve);proc.once('error',reject);proc.once('exit',()=>reject(Error('server exited')));});});
+before(async()=>{proc=spawn(process.execPath,['reference-server.mjs'],{env:{...process.env,CLOVA_STUDIO_API_KEY:'',PORT:'3198'}});await new Promise((resolve,reject)=>{proc.stdout.once('data',resolve);proc.once('error',reject);proc.once('exit',()=>reject(Error('server exited')));});});
 after(()=>proc.kill());
 test('keyword bank validates topic and produces valid questions',()=>{for(const topic of ['상식','개발','과학','역사']){const q=makeQuestions(topic,6);assert.equal(q.length,6);assert.equal(new Set(q.map(x=>x.text)).size,6);assert.ok(q.every(x=>x.options.length===4&&x.answer>=0&&x.answer<4));}assert.throws(()=>makeQuestions('unsupported',6));});
 async function snapshot(session){const abort=new AbortController();const res=await fetch(`${base}/api/rooms/${session.code}/events?token=${session.token}`,{signal:abort.signal});const reader=res.body.getReader();const {value}=await reader.read();abort.abort();return JSON.parse(new TextDecoder().decode(value).split('data: ')[1].split('\n')[0]);}

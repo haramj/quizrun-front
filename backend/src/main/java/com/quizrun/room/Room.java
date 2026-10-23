@@ -20,7 +20,8 @@ public class Room {
     public static class Player {
         public final String id;
         public final String token;
-        public final String name;
+        public String name;
+        public String avatar = "";
         public final String color;
         public int score;
         public int correct;
@@ -56,6 +57,8 @@ public class Room {
 
     /** 키워드. 준비가 끝나면 실제 출제 주제(별칭 해석 결과)로 바뀔 수 있다. */
     public String keyword;
+    /** Public lobby visibility. Code/link access remains available for invitation rooms. */
+    public String visibility = "public";
     /** 문제 출처: "ai"(전부 새로 생성) · "mixed"(문제은행 + 새로 생성) · "bank"(문제은행/내장). 준비 전에는 null. */
     public String source;
     /** 문제에 쓰인 근거 자료 출처(예: "위키백과 · 손흥민"). 화면에 출처를 표시하기 위한 값. */

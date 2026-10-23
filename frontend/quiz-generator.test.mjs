@@ -46,7 +46,7 @@ test('AI rooms use generated questions, hide answers until reveal and reject mal
   res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(complete(qs)));
  });
  await new Promise(resolve=>provider.listen(0,'127.0.0.1',resolve));
- const child=spawn(process.execPath,['server.mjs'],{env:{...process.env,...env,CLOVA_STUDIO_BASE_URL:`http://127.0.0.1:${provider.address().port}`,PORT:'3197'}});
+ const child=spawn(process.execPath,['reference-server.mjs'],{env:{...process.env,...env,CLOVA_STUDIO_BASE_URL:`http://127.0.0.1:${provider.address().port}`,PORT:'3197'}});
  try{
   await new Promise((resolve,reject)=>{child.stdout.once('data',resolve);child.once('error',reject);child.once('exit',()=>reject(Error('server exited')));});
   const base='http://127.0.0.1:3197';

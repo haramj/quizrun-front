@@ -8,9 +8,21 @@ public final class Dtos {
     private Dtos() {}
 
     public record CreateRoomRequest(String keyword, String title, String name,
-                                    Number capacity, Number timeLimit, Number count) {}
+                                    Number capacity, Number timeLimit, Number count, String avatar, String visibility) {
+        public CreateRoomRequest(String keyword, String title, String name, Number capacity, Number timeLimit, Number count) {
+            this(keyword, title, name, capacity, timeLimit, count, null, null);
+        }
+    }
 
-    public record JoinRequest(String name) {}
+    public record JoinRequest(String name, String avatar) {
+        public JoinRequest(String name) { this(name, null); }
+    }
+
+    public record ProfileRequest(String token, String name, String avatar) {}
+
+    public record ClientConfig(boolean aiAvailable, String aiProvider, List<Integer> questionCounts,
+                               int keywordMaxLength, boolean profiles, boolean visibility,
+                               boolean reports, boolean automaticSource) {}
 
     public record TokenRequest(String token) {}
 
@@ -33,7 +45,7 @@ public final class Dtos {
     public record RoomSummary(String code, String title, String keyword, int count, int capacity,
                               int total, int timeLimit, String source, String prepare) {}
 
-    public record PublicPlayer(String id, String name, String color, int score, int correct,
+    public record PublicPlayer(String id, String name, String avatar, String color, int score, int correct,
                                int lastPoints, boolean online, boolean answered) {}
 
     public record QuestionView(String text, List<String> options) {}
@@ -44,5 +56,5 @@ public final class Dtos {
                             String phase, int index, int total, Long deadline, int timeLimit,
                             List<Room.ChatMessage> messages, String host, String you,
                             List<PublicPlayer> players, QuestionView question, Integer answer,
-                            Integer yourAnswer) {}
+                            Integer yourAnswer, String visibility, int requestedCount, boolean startRequested) {}
 }

@@ -4,6 +4,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import java.time.Duration;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,9 +26,27 @@ public class RoomController {
     private static final Map<String, Boolean> OK = Map.of("ok", true);
 
     private final RoomService rooms;
+    private final AvatarService avatars;
+    private final QuestionGenerator generator;
 
-    public RoomController(RoomService rooms) {
+    public RoomController(RoomService rooms, AvatarService avatars, QuestionGenerator generator) {
         this.rooms = rooms;
+        this.avatars = avatars;
+        this.generator = generator;
+    }
+
+    @GetMapping("/config")
+    public ClientConfig config() {
+        return new ClientConfig(generator.enabled(), "CLOVA Studio", List.of(4, 6, 8, 10, 12),
+                30, true, true, true, true);
+    }
+
+    @GetMapping("/avatars/{id}.jpg")
+    public ResponseEntity<byte[]> avatar(@PathVariable String id) {
+        return avatars.find(id).map(bytes -> ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.maxAge(Duration.ofHours(6)).cachePublic().immutable())
+                .header("X-Content-Type-Options", "nosniff").body(bytes))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /** 로드밸런서 헬스체크용 (프론트 계약 유지). */
@@ -46,7 +68,7 @@ public class RoomController {
 
     @PostMapping("/rooms/{code}/join")
     public JoinResponse join(@PathVariable String code, @RequestBody(required = false) JoinRequest body) {
-        return rooms.join(code, body == null ? null : body.name());
+        return rooms.join(code, body == null ? null : body.name(), body == null ? null : body.avatar());
     }
 
     @GetMapping("/rooms/{code}/state")
@@ -59,6 +81,13 @@ public class RoomController {
     @PostMapping("/rooms/{code}/start")
     public Map<String, Boolean> start(@PathVariable String code, @RequestBody(required = false) TokenRequest body) {
         rooms.start(code, body == null ? null : body.token());
+        return OK;
+    }
+
+    @PostMapping("/rooms/{code}/profile")
+    public Map<String, Boolean> profile(@PathVariable String code, @RequestBody(required = false) ProfileRequest body) {
+        if (body == null) throw ApiException.badRequest("프로필을 보내 주세요.");
+        rooms.profile(code, body.token(), body.name(), body.avatar());
         return OK;
     }
 
