@@ -1,0 +1,97 @@
+/* Profile faces and AI creation extend the existing arcade theme. */
+[hidden] { display: none !important; }
+.profile-photo { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.avatar, .rank-avatar { display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.rank-avatar { width: 38px; height: 38px; border: 2px solid #d9c0ef; }
+.modal { width: min(560px, 100%); }
+.profile-editor, .source-picker { padding: 0; border: 0; min-width: 0; margin: 22px 0 0; }
+.profile-editor legend, .source-picker legend { font-size: 12px; font-weight: 700; color: #d5c8e7; margin-bottom: 12px; }
+.profile-editor-top { display: flex; align-items: center; gap: 14px; padding: 15px; background: #151022; border: 1px solid #574365; border-radius: 16px; }
+.crop-preview { width: 86px; height: 86px; flex-shrink: 0; border-radius: 50%; background: #403052; border: 3px solid var(--lime); overflow: hidden; display: grid; place-items: center; font-size: 60px; color: var(--lime); }
+.crop-preview canvas { display: block; width: 100%; height: 100%; }
+.photo-actions { flex: 1; min-width: 0; }
+.modal .photo-upload { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 9px 15px; border-radius: 8px; background: var(--lime); color: #1e2914; cursor: pointer; font-weight: 800; position: relative; min-height: 40px; }
+.modal .photo-upload:focus-within { outline: 3px solid #b59af6; outline-offset: 3px; }
+.modal .photo-upload input { position: absolute; width: 1px; height: 1px; min-height: 0; opacity: 0; padding: 0; margin: 0; overflow: hidden; }
+.photo-remove { display: block; padding: 8px 0; min-height: 36px; background: transparent; color: #c5b1d9; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.photo-edit-actions { display: flex; flex-wrap: wrap; gap: 0 12px; }
+.photo-actions small { display: block; color: #a28bb7; font-size: 10px; line-height: 1.5; }
+.runner-preview { flex-shrink: 0; width: 72px; }
+.runner-preview .runner { display: block; width: 72px; height: 94px; filter: drop-shadow(0 4px 0 #0005); }
+.avatar-cropper { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: #080611ec; overscroll-behavior: contain; }
+.avatar-crop-card { width: min(460px, 100%); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid #685180; border-radius: 24px; background: #211b35; box-shadow: 0 24px 80px #0008; }
+.crop-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.crop-heading h3 { font-size: 24px; margin-top: 7px; color: #f4eeff; }
+.crop-heading .eyebrow { font-size: 9px; }
+.crop-close { align-self: flex-start; width: 40px; height: 40px; border-radius: 50%; color: #c5b1d9; background: #352844; font-size: 26px; }
+#crop-instructions { color: #b8a7ca; font-size: 12px; line-height: 1.8; margin: 12px 0 16px; }
+.crop-stage { position: relative; width: min(100%, max(160px, calc(100dvh - 360px))); margin-inline: auto; border-radius: 16px; overflow: hidden; background: #151022; }
+.crop-stage canvas { display: block; width: 100%; height: auto; aspect-ratio: 1; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.crop-stage canvas.is-dragging { cursor: grabbing; }
+.crop-stage canvas:focus-visible { outline: 3px solid #c4ff62; outline-offset: -3px; }
+.crop-drag-hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; color: #d4c4e5; font-size: 11px; pointer-events: none; }
+.crop-zoom-row { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+.modal .crop-zoom-row label { margin: 0; flex-shrink: 0; font-size: 12px; }
+.modal .crop-zoom-row input { min-height: 32px; height: 32px; padding: 0; margin: 0; accent-color: var(--lime); border: 0; background: transparent; }
+.crop-zoom-row output { width: 42px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--lime); text-align: right; font-variant-numeric: tabular-nums; }
+.crop-reset-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 7px; }
+.crop-reset-row > span { color: #aa97bd; font-size: 10px; }
+#crop-reset { background: transparent; color: #d4bdeb; font-size: 11px; min-height: 36px; padding: 6px 0; }
+.crop-footer { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 16px; position: sticky; bottom: -24px; padding-top: 8px; background: #211b35; }
+.crop-footer .btn { min-height: 48px; padding: 0 14px; }
+.crop-footer .outline { border-color: #685180; color: #d5c8e7; }
+.photo-hint { color: #b3a0c7; font-size: 11px; line-height: 1.7; margin-top: 10px; }
+.source-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.source-picker legend { margin-bottom: 2px; }
+.modal .source-picker label { margin-top: 10px; display: flex; align-items: flex-start; gap: 9px; border: 1px solid #574365; border-radius: 12px; background: #191326; padding: 13px 11px; cursor: pointer; }
+.source-picker label:has(input:checked) { border-color: var(--lime); background: #c4ff6210; }
+.modal .source-picker input { appearance: auto; width: 16px; min-height: 16px; height: 16px; padding: 0; margin: 2px 0 0; flex-shrink: 0; accent-color: var(--lime); }
+.source-picker b { display: block; font-size: 12px; line-height: 1.5; }
+.source-picker small { display: block; font-size: 10px; font-weight: 400; color: #ac98c0; line-height: 1.6; margin-top: 5px; }
+.source-status { margin-top: 12px; font-size: 11px; line-height: 1.7; color: #c3a5e0; }
+.generation-progress { display: flex; gap: 13px; border: 1px solid #c4ff6245; padding: 16px; border-radius: 12px; background: #c4ff620b; margin: 14px 0; color: #e4f4d1; }
+.generation-progress b { font-size: 12px; }
+.generation-progress p { color: #b4c4a1; line-height: 1.8; margin-top: 6px; font-size: 11px; }
+.generation-spinner { width: 21px; height: 21px; flex-shrink: 0; border: 3px solid #c4ff6230; border-top-color: var(--lime); border-radius: 50%; animation: generating 1s linear infinite; }
+button:disabled { opacity: .6; }
+.answer-explanation { margin-top: 16px; padding: 16px 18px; border: 1px solid #b2ff7755; border-radius: 14px; background: #b2ff770c; }
+.answer-explanation > span { color: var(--lime); font-size: 11px; font-weight: 800; }
+.answer-explanation p { color: #e1d6ed; font-size: 13px; line-height: 1.8; margin-top: 7px; overflow-wrap: anywhere; }
+/* At least a 38px photo face on phones; score badges sit next to the body. */
+.lanes { max-height: 420px; }
+.lane { min-height: 112px; }
+.lane-road { height: 111px; margin-right: 22px; }
+.race-runner, .race-runner .runner { width: var(--race-runner-width, 88px); height: 106px; }
+.race-runner { --race-runner-width: 88px; bottom: 2px; left: calc(var(--runner-progress, 0) * (100% - var(--race-runner-width))); }
+.race-runner > span { top: auto; bottom: 1px; right: -3px; font-size: 10px; z-index: 1; }
+.lane-label b { overflow-wrap: anywhere; }
+@keyframes generating { to { transform: rotate(360deg); } }
+@media(max-width:700px) {
+ .modal { padding: 26px 20px; }
+ .profile-editor-top { gap: 10px; padding: 12px; }
+ .crop-preview { width: 72px; height: 72px; }
+ .runner-preview, .runner-preview .runner { width: 58px; }
+ .runner-preview .runner { height: 82px; }
+ .photo-actions small { font-size: 9px; }
+ .modal .photo-upload { padding: 8px 12px; }
+ .photo-edit-actions { gap: 0 9px; }
+ .avatar-cropper { padding: 10px; }
+ .avatar-crop-card { padding: 20px 16px; border-radius: 20px; max-height: calc(100dvh - 20px); }
+ .crop-heading h3 { font-size: 22px; }
+ .crop-heading .eyebrow { font-size: 8px; }
+ #crop-instructions { font-size: 11px; }
+ .crop-footer { padding-bottom: env(safe-area-inset-bottom); }
+ .source-picker { gap: 8px; }
+ .modal .source-picker label { padding: 12px 9px; gap: 6px; }
+ .source-picker b { font-size: 11px; }
+ .lanes { max-height: 324px; }
+ .lane { min-height: 108px; }
+ .lane-label { width: 58px; }
+ .lane-label b { font-size: 10px; }
+ .lane-road { height: 107px; margin-right: 26px; }
+ .race-runner { --race-runner-width: 78px; }
+ .race-runner, .race-runner .runner { height: 100px; }
+ .race-runner > span { font-size: 9px; bottom: 0; right: -2px; }
+ .rank-avatar { width: 38px; height: 38px; }
+}
+@media(prefers-reduced-motion:reduce) { .generation-spinner { animation: none; } }

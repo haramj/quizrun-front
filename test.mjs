@@ -2,9 +2,10 @@ import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {makeQuestions,topics,resolveTopic} from './questions.mjs';
+import {readFileSync} from 'node:fs';
 let proc;const base='http://127.0.0.1:3198';
 const post=async(path,body)=>{const r=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:r.status,data:await r.json()};};
-before(async()=>{proc=spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'3198'}});await new Promise((resolve,reject)=>{proc.stdout.once('data',resolve);proc.once('error',reject);proc.once('exit',()=>reject(Error('server exited')));});});
+before(async()=>{proc=spawn(process.execPath,['server.mjs'],{env:{...process.env,CLOVA_STUDIO_API_KEY:'',PORT:'3198'}});await new Promise((resolve,reject)=>{proc.stdout.once('data',resolve);proc.once('error',reject);proc.once('exit',()=>reject(Error('server exited')));});});
 after(()=>proc.kill());
 test('keyword bank validates topic and produces valid questions',()=>{for(const topic of ['상식','개발','과학','역사']){const q=makeQuestions(topic,6);assert.equal(q.length,6);assert.equal(new Set(q.map(x=>x.text)).size,6);assert.ok(q.every(x=>x.options.length===4&&x.answer>=0&&x.answer<4));}assert.throws(()=>makeQuestions('unsupported',6));});
 async function snapshot(session){const abort=new AbortController();const res=await fetch(`${base}/api/rooms/${session.code}/events?token=${session.token}`,{signal:abort.signal});const reader=res.body.getReader();const {value}=await reader.read();abort.abort();return JSON.parse(new TextDecoder().decode(value).split('data: ')[1].split('\n')[0]);}
@@ -80,4 +81,50 @@ test('100 player capacity, full-room rejection and twelve-question creation',asy
  state=await snapshot(host);assert.equal(state.players.length,100);assert.equal(state.capacity,100);assert.equal(state.phase,'countdown');
  assert.equal((await post(`/api/rooms/${host.code}/join`,{name:'runner 101'})).status,400);
  const list=await (await fetch(base+'/api/rooms')).json();assert.ok(!list.some(r=>r.code===host.code));
+});
+
+test('profile photos survive create, join and authenticated updates without inflating polling payloads',async()=>{
+ const photo='data:image/jpeg;base64,'+readFileSync(new URL('./test/fixtures/avatar.jpg',import.meta.url)).toString('base64');
+ const {data:host,status}=await post('/api/rooms',{keyword:'과학',name:'사진 방장',capacity:4,count:4,avatar:photo});
+ assert.equal(status,201);
+ const {data:guest,status:joined}=await post(`/api/rooms/${host.code}/join`,{name:'사진 친구',avatar:photo});assert.equal(joined,200);
+ const state=await snapshot(host);assert.equal(state.players.length,2);
+ const url=state.players[0].avatar;assert.match(url,/^\/api\/avatars\/[a-f0-9]{64}\.jpg$/);
+ assert.equal(state.players[1].avatar,url);assert.ok(!JSON.stringify(state).includes('data:image'));
+ const image=await fetch(base+url);assert.equal(image.status,200);assert.equal(image.headers.get('Content-Type'),'image/jpeg');
+ assert.deepEqual(Buffer.from(await image.arrayBuffer()),readFileSync(new URL('./test/fixtures/avatar.jpg',import.meta.url)));
+ assert.equal((await post(`/api/rooms/${host.code}/profile`,{token:'wrong',name:'침입자',avatar:''})).status,400);
+ assert.equal((await post(`/api/rooms/${host.code}/profile`,{token:guest.token,name:'변경된 친구',avatar:''})).status,200);
+ const changed=(await snapshot(host)).players.find(p=>p.name==='변경된 친구');assert.ok(changed);assert.equal(changed.avatar,'');
+ for(const avatar of ['https://example.com/photo.jpg','data:image/svg+xml;base64,PHN2Zz4=','data:image/jpeg;base64,ZmFrZQ==',photo+'a']){
+  assert.equal((await post(`/api/rooms/${host.code}/profile`,{token:host.token,name:'잘못된 변경',avatar})).status,400);
+ }
+ const unchanged=(await snapshot(guest)).players.find(p=>p.id===state.host);assert.equal(unchanged.name,'사진 방장');assert.equal(unchanged.avatar,url);
+ assert.equal((await post('/api/rooms',{keyword:'과학',avatar:'x'.repeat(101000)})).status,400);
+ assert.equal((await fetch(base+'/api/avatars/'+'0'.repeat(64)+'.jpg')).status,404);
+});
+
+test('unconfigured AI is explicit and never silently creates a bank room',async()=>{
+ const config=await(await fetch(base+'/api/config')).json();assert.equal(config.aiAvailable,false);assert.ok(!('apiKey' in config));
+ const before=await(await fetch(base+'/api/rooms')).json();
+ assert.equal((await post('/api/rooms',{keyword:'블랙홀의 원리',questionSource:'ai',count:6})).status,503);
+ const after=await(await fetch(base+'/api/rooms')).json();assert.equal(after.length,before.length);
+ for(const body of [{keyword:'과학',count:5},{keyword:'과학',questionSource:'invalid'}])assert.equal((await post('/api/rooms',body)).status,400);
+});
+
+test('invite-code rooms stay off the lobby and remain joinable by code',async()=>{
+ assert.equal((await post('/api/rooms',{keyword:'과학',visibility:'invalid'})).status,400);
+ const {data:privateRoom,status}=await post('/api/rooms',{keyword:'과학',visibility:'friends',name:'초대 방장'});
+ assert.equal(status,201);
+ const {data:publicRoom}=await post('/api/rooms',{keyword:'과학',visibility:'public',name:'공개 방장'});
+ const list=await(await fetch(base+'/api/rooms')).json();
+ assert.ok(!list.some(r=>r.code===privateRoom.code));assert.ok(list.some(r=>r.code===publicRoom.code));
+ assert.equal((await post(`/api/rooms/${privateRoom.code}/join`,{name:'초대 친구'})).status,200);
+ assert.equal((await snapshot(privateRoom)).players.length,2);
+});
+
+test('world assets are served with their actual MIME types',async()=>{
+ for(const [path,type] of [['/world.js','text/javascript'],['/world.css','text/css']]){
+  const response=await fetch(base+path);assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),type);
+ }
 });
