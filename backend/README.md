@@ -31,7 +31,7 @@ cp .env.example .env        # NCP_CLOVA_API_KEY 입력 (없으면 내장 카테�
 docker compose up --build   # http://localhost:3000  (프론트 포함)
 ```
 
-저장소 루트의 `public/`(프론트)이 `backend/`의 상위에 있어야 프론트가 함께 서빙됩니다.
+저장소의 `frontend/public/`이 `backend/`와 같은 레벨에 있어야 프론트가 함께 서빙됩니다.
 문제은행 DB는 도커 볼륨(`quizrun-data`)에 남습니다. 처음부터 다시 시작하려면 `docker compose down -v`.
 
 ### 테스트

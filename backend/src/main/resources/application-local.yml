@@ -1,6 +1,6 @@
-# 로컬 개발용: 저장소 루트의 프론트(public)를 같은 포트에서 함께 서빙한다.
+# 로컬 개발용: 프론트(frontend/public)를 같은 포트에서 함께 서빙한다.
 # 실행: ./gradlew bootRun --args='--spring.profiles.active=local'
 spring:
   web:
     resources:
-      static-locations: file:../public/
+      static-locations: file:../frontend/public/
