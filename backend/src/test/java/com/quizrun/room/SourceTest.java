@@ -115,7 +115,9 @@ class SourceTest {
     void supplementsWithNamuWhenWikipediaIsThin() throws Exception {
         when(wiki.find(anyString())).thenReturn(Optional.of(doc("위키백과", 800)));
         when(namu.find(anyString())).thenReturn(Optional.of(doc("나무위키", 6000)));
-        assertThat(service.find("카리나").orElseThrow().site()).isEqualTo("나무위키");
+        SourceDocument merged = service.find("카리나").orElseThrow();
+        assertThat(merged.site()).contains("위키백과").contains("나무위키");
+        assertThat(merged.text().length()).as("두 자료를 합쳐 사실을 늘린다").isGreaterThan(800 + 3000);
     }
 
     @Test

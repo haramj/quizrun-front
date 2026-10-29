@@ -55,7 +55,9 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
             - 반드시 JSON 배열만 출력합니다. 설명, 마크다운 코드블록, 머리말을 붙이지 않습니다.
             """;
 
-    private static final int MAX_ATTEMPTS = 2;
+    private static final int MAX_ATTEMPTS = 4;
+    /** 한 번에 너무 많이 요청하면 출력이 잘리거나 시간이 초과되므로 호출당 상한을 둔다. */
+    private static final int MAX_PER_CALL = 8;
     /** 부정형 문제("~가 아닌 것은?")는 정답이 "틀린 사실"이 되어 근거 검증이 의미 없으므로 버린다. */
     private static final Pattern NEGATIVE = Pattern.compile("아닌 것|아닌 건|않은 것|않는 것|틀린 것|제외한|옳지 않|다른 것");
     /** "정보 없음" 같은 보기는 그럴듯한 오답이 아니라 정답 위치를 알려 주는 힌트가 된다. */
@@ -73,7 +75,7 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
             @Value("${quizrun.clova.api-key:}") String apiKey,
             @Value("${quizrun.clova.base-url:https://clovastudio.stream.ntruss.com}") String baseUrl,
             @Value("${quizrun.clova.model:HCX-007}") String model,
-            @Value("${quizrun.clova.timeout-seconds:60}") int timeoutSeconds,
+            @Value("${quizrun.clova.timeout-seconds:90}") int timeoutSeconds,
             @Value("${quizrun.clova.max-concurrent:4}") int maxConcurrent) {
         this.mapper = mapper;
         this.apiKey = apiKey == null ? "" : apiKey.trim();
@@ -95,6 +97,11 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
 
     @Override
     public Optional<List<GeneratedQuestion>> generate(String keyword, SourceDocument doc, int want, int atLeast) {
+        return generate(keyword, doc, want, atLeast, List.of());
+    }
+
+    @Override
+    public Optional<List<GeneratedQuestion>> generate(String keyword, SourceDocument doc, int want, int atLeast, List<String> avoid) {
         if (!enabled()) return Optional.empty();
         // 동시 호출 상한: 쿼터·비용 보호. 가득 차면 호출자가 다른 경로로 폴백한다.
         if (!slots.tryAcquire()) {
@@ -105,11 +112,21 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
         try {
             List<GeneratedQuestion> valid = new ArrayList<>();
             Set<String> texts = new LinkedHashSet<>();
-            // 모델이 요청한 개수를 못 채우거나 검증에서 탈락하는 경우가 있어, 모자라면 한 번 더 요청한다.
+            // 이미 가진 문제는 프롬프트의 "다시 묻지 말 것" 목록에 넣되, 결과에는 섞지 않는다.
+            List<String> known = new ArrayList<>(avoid);
+            // 모델이 요청한 개수를 못 채우거나 검증에서 탈락하는 경우가 있어, 목표를 채울 때까지 몇 번 더 요청한다.
+            // 한 번의 호출이 실패(타임아웃·429·잘린 응답)해도 이미 통과한 문제는 버리지 않는다.
             for (int attempt = 1; attempt <= MAX_ATTEMPTS && valid.size() < atLeast; attempt++) {
-                String content = call(keyword, doc, attempt == 1 ? want : want - valid.size() + 1, List.copyOf(texts));
-                for (GeneratedQuestion g : parse(content, mapper, doc.text())) {
-                    if (texts.add(g.question().text())) valid.add(g);
+                int remaining = atLeast - valid.size();
+                int ask = attempt == 1 ? Math.min(want, MAX_PER_CALL)
+                        : Math.min(MAX_PER_CALL, (int) Math.ceil(remaining * 1.5) + 1);
+                try {
+                    String content = call(keyword, doc, ask, concat(known, texts));
+                    for (GeneratedQuestion g : parse(content, mapper, doc.text())) {
+                        if (texts.add(g.question().text())) valid.add(g);
+                    }
+                } catch (Exception e) {
+                    log.warn("AI 문제 생성 {}차 호출 실패: {}", attempt, e.toString());
                 }
                 log.info("AI 문제 생성 {}차: 누적 검증 통과 {}개 (목표 {}개, 자료={})", attempt, valid.size(), atLeast, doc.credit());
             }
@@ -124,6 +141,12 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
         } finally {
             slots.release();
         }
+    }
+
+    private static List<String> concat(List<String> a, Set<String> b) {
+        List<String> all = new ArrayList<>(a);
+        all.addAll(b);
+        return List.copyOf(all);
     }
 
     private String call(String keyword, SourceDocument doc, int count, List<String> avoid) throws Exception {
@@ -145,7 +168,8 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
         body.put("repetitionPenalty", 1.1);
         if (model.startsWith("HCX-007")) {
             // 추론 모델: maxTokens 대신 maxCompletionTokens, temperature/topK 미사용
-            body.put("maxCompletionTokens", 5120);
+            // 생각 토큰도 이 한도에 포함되므로 문제 수에 비례해 넉넉히 준다(부족하면 JSON이 잘린다).
+            body.put("maxCompletionTokens", Math.min(16000, 3000 + 800 * count));
             body.put("thinking", Map.of("effort", "low"));
         } else {
             body.put("maxTokens", Math.min(4096, 260 * count + 200));
@@ -175,15 +199,9 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
     static List<GeneratedQuestion> parse(String content, ObjectMapper mapper, String docText) {
         if (content == null) return List.of();
         int from = content.indexOf('[');
-        int to = content.lastIndexOf(']');
-        if (from < 0 || to <= from) return List.of();
-        JsonNode array;
-        try {
-            array = mapper.readTree(content.substring(from, to + 1));
-        } catch (Exception e) {
-            return List.of();
-        }
-        if (!array.isArray()) return List.of();
+        if (from < 0) return List.of();
+        JsonNode array = readArrayLeniently(content.substring(from), mapper);
+        if (array == null || !array.isArray()) return List.of();
 
         String normDoc = Texts.norm(docText);
         List<GeneratedQuestion> result = new ArrayList<>();
@@ -217,6 +235,43 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
             result.add(new GeneratedQuestion(new Question(text, List.copyOf(options), answer), evidence));
         }
         return result;
+    }
+
+    /**
+     * JSON 배열을 읽는다. 출력이 토큰 한도에서 잘려 닫는 ']'가 없어도, 끝까지 완성된 객체는 건져 쓴다.
+     */
+    static JsonNode readArrayLeniently(String text, ObjectMapper mapper) {
+        int to = text.lastIndexOf(']');
+        if (to > 0) {
+            try {
+                return mapper.readTree(text.substring(0, to + 1));
+            } catch (Exception ignored) {
+                // 아래에서 객체 단위로 건진다.
+            }
+        }
+        var out = mapper.createArrayNode();
+        int depth = 0, start = -1;
+        boolean inString = false, escaped = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') inString = true;
+            else if (c == '{') {
+                if (depth++ == 0) start = i;
+            } else if (c == '}' && depth > 0 && --depth == 0) {
+                try {
+                    out.add(mapper.readTree(text.substring(start, i + 1)));
+                } catch (Exception ignored) {
+                    // 깨진 객체 하나는 건너뛴다.
+                }
+            }
+        }
+        return out;
     }
 
     /**

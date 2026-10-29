@@ -38,7 +38,7 @@ public class SourceService implements SourceFinder {
 
     public SourceService(WikipediaSource wikipedia, NamuWikiSource namu, Clock clock,
                          @Value("${quizrun.sources.namu-enabled:true}") boolean namuEnabled,
-                         @Value("${quizrun.sources.thin-chars:2500}") int thinChars) {
+                         @Value("${quizrun.sources.thin-chars:6000}") int thinChars) {
         this.wikipedia = wikipedia;
         this.namu = namu;
         this.clock = clock;
@@ -81,11 +81,20 @@ public class SourceService implements SourceFinder {
             }
         }
         Optional<SourceDocument> best = wiki;
-        if (namuDoc.isPresent() && (wiki.isEmpty() || namuDoc.get().text().length() > wiki.get().text().length())) {
+        if (namuDoc.isPresent() && wiki.isPresent() && namuDoc.get().text().length() >= MIN_USABLE_CHARS) {
+            // 사실이 많을수록 요청한 문제 수를 채우기 쉬우므로, 얇은 위키백과는 나무위키와 합쳐 쓴다.
+            best = Optional.of(merge(wiki.get(), namuDoc.get()));
+        } else if (namuDoc.isPresent() && (wiki.isEmpty() || namuDoc.get().text().length() > wiki.get().text().length())) {
             best = namuDoc;
         }
         best = best.filter(d -> d.text().length() >= MIN_USABLE_CHARS);
         log.info("자료 조회 '{}': {}", keyword, best.map(d -> d.credit() + " " + d.text().length() + "자").orElse("없음"));
         return new Lookup(best, error && best.isEmpty());
+    }
+
+    private static SourceDocument merge(SourceDocument wiki, SourceDocument namu) {
+        String text = wiki.text() + "\n\n" + namu.text();
+        if (text.length() > WikipediaSource.MAX_CHARS) text = text.substring(0, WikipediaSource.MAX_CHARS);
+        return new SourceDocument(wiki.site() + " · " + namu.site(), wiki.title(), text);
     }
 }

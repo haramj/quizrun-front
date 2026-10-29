@@ -15,4 +15,9 @@ public interface QuestionGenerator {
      * 예외를 던지지 않는다.
      */
     Optional<List<GeneratedQuestion>> generate(String keyword, SourceDocument doc, int want, int atLeast);
+
+    /** avoid에 든 문제와 같은 사실을 다시 묻지 않도록 알려 주며 생성한다. 지원하지 않는 생성기는 avoid를 무시한다. */
+    default Optional<List<GeneratedQuestion>> generate(String keyword, SourceDocument doc, int want, int atLeast, List<String> avoid) {
+        return generate(keyword, doc, want, atLeast);
+    }
 }

@@ -38,6 +38,13 @@ class ClovaQuestionGeneratorTest {
     }
 
     @Test
+    void salvagesCompleteQuestionsFromATruncatedResponse() {
+        String full = q("잘린 문제", "공격수", WRONG, "포지션은 공격수이다");
+        String cut = "[" + GOOD + "," + full.substring(0, full.length() - 12);
+        assertThat(ClovaQuestionGenerator.parse(cut, mapper, DOC)).hasSize(1);
+    }
+
+    @Test
     void toleratesCodeFencesAndProse() {
         String content = "물론이죠!\n```json\n[" + GOOD + "]\n```\n즐거운 시간 되세요.";
         assertThat(ClovaQuestionGenerator.parse(content, mapper, DOC)).hasSize(1);
