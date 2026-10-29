@@ -56,6 +56,22 @@ class ApiContractTest {
         org.assertj.core.api.Assertions.assertThat(state).doesNotContain(token);
     }
 
+    /** 실제 스프링 컨텍스트에서 검수 문제 세트가 읽혀 DB에 적재되고, AI 없이 출제까지 되는지 확인한다. */
+    @Test
+    void curatedKeywordWorksInTheRealApplicationContext() throws Exception {
+        for (String keyword : new String[] {"네이버 클라우드", "NCP"}) {
+            String res = mvc.perform(post("/api/rooms").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"keyword\":\"" + keyword + "\",\"name\":\"Curated\",\"capacity\":4,\"count\":12}"))
+                    .andExpect(status().isCreated())
+                    .andReturn().getResponse().getContentAsString();
+            JsonNode created = json.readTree(res);
+            mvc.perform(get("/api/rooms/" + created.get("code").asText() + "/state")
+                            .header("Authorization", "Bearer " + created.get("token").asText()))
+                    .andExpect(jsonPath("$.prepare").value("ready"))
+                    .andExpect(jsonPath("$.total").value(12));
+        }
+    }
+
     @Test
     void unknownRoomIs404AndBadJsonIs400() throws Exception {
         mvc.perform(post("/api/rooms/ZZZZZZ/join").contentType(MediaType.APPLICATION_JSON).content("{}"))
