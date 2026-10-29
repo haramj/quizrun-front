@@ -128,6 +128,15 @@ class SourceTest {
     }
 
     @Test
+    void retriesATransientWikipediaErrorInsteadOfGivingUp() throws Exception {
+        when(wiki.find(anyString()))
+                .thenThrow(new RuntimeException("429"))
+                .thenReturn(Optional.of(doc("위키백과", 5000)));
+        assertThat(service.find("리센느").orElseThrow().site()).isEqualTo("위키백과");
+        verify(wiki, times(2)).find(anyString());
+    }
+
+    @Test
     void fallsBackToNamuWhenWikipediaFails() throws Exception {
         when(wiki.find(anyString())).thenThrow(new RuntimeException("429"));
         when(namu.find(anyString())).thenReturn(Optional.of(doc("나무위키", 3000)));
