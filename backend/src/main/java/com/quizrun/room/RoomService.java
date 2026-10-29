@@ -47,7 +47,7 @@ public class RoomService {
      * 방이 영원히 preparing에 남는다 — 어느 서버든 이 시간이 지난 방을 발견하면 실패 처리한다(수업 Day4: 서버는 언제든 사라진다).
      * 위키 조회(최대 약 35초) + CLOVA 2회(각 최대 60초)를 감안한 값.
      */
-    static final long PREPARE_TIMEOUT_MS = 180_000;
+    static final long PREPARE_TIMEOUT_MS = 300_000;
     private static final String[] COLORS = {"#d9ff43", "#b9a7ff", "#ff9b75", "#91d7f3", "#f3a7d6", "#7bddb1"};
     private static final Set<Integer> TIME_LIMITS = Set.of(5, 10, 15, 20, 30);
     private static final Set<Integer> QUESTION_COUNTS = Set.of(4, 6, 8, 10, 12);

@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Component
 public class WikipediaSource {
 
-    static final int MAX_CHARS = 12000;
+    static final int MAX_CHARS = 8000;
     private static final Pattern TAIL = Pattern.compile("\\n=+ *(같이 보기|각주|외부 링크|참고 문헌|참고 자료|관련 항목|주석) *=+");
     private static final Pattern HEADING = Pattern.compile("(?m)^=+ *(.+?) *=+$");
 
