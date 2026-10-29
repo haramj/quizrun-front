@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +29,7 @@ public class CuratedQuestions {
 
     private final List<Set_> sets;
 
+    @Autowired
     public CuratedQuestions(ObjectMapper mapper) throws IOException {
         List<Set_> loaded = new ArrayList<>();
         for (String file : FILES) {
