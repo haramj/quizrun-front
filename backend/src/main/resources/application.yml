@@ -69,7 +69,7 @@ quizrun:
     api-key: ${NCP_CLOVA_API_KEY:}
     model: HCX-007
     timeout-seconds: 60
-    max-concurrent: 4
+    max-concurrent: 2
 
   # 문제의 근거가 되는 자료. 위키백과가 기본, 본문이 짧으면 나무위키로 보강한다.
   sources:

@@ -38,6 +38,14 @@ class ClovaQuestionGeneratorTest {
     }
 
     @Test
+    void parsesRateLimitResetDurations() {
+        assertThat(ClovaQuestionGenerator.parseDurationMs("29s")).isEqualTo(29_000);
+        assertThat(ClovaQuestionGenerator.parseDurationMs("1m5s")).isEqualTo(65_000);
+        assertThat(ClovaQuestionGenerator.parseDurationMs("500ms")).isEqualTo(500);
+        assertThat(ClovaQuestionGenerator.parseDurationMs("3")).isEqualTo(3_000);
+    }
+
+    @Test
     void salvagesCompleteQuestionsFromATruncatedResponse() {
         String full = q("잘린 문제", "공격수", WRONG, "포지션은 공격수이다");
         String cut = "[" + GOOD + "," + full.substring(0, full.length() - 12);

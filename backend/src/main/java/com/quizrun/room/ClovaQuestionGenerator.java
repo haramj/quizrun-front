@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -56,6 +57,8 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
             """;
 
     private static final int MAX_ATTEMPTS = 4;
+    private static final int MAX_RATE_LIMIT_WAITS = 4;
+    private static final long RATE_LIMIT_BACKOFF_MS = 2000;
     /** 한 번에 너무 많이 요청하면 출력이 잘리거나 시간이 초과되므로 호출당 상한을 둔다. */
     private static final int MAX_PER_CALL = 8;
     /** 부정형 문제("~가 아닌 것은?")는 정답이 "틀린 사실"이 되어 근거 검증이 의미 없으므로 버린다. */
@@ -149,6 +152,62 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
         return List.copyOf(all);
     }
 
+    /** 요청 한도 초과(429)는 잠시 기다렸다가 다시 보낸다. 기다림 없이 재시도하면 시도 횟수만 소진된다. */
+    private String post(Map<String, Object> body) throws InterruptedException {
+        for (int wait = 0; ; wait++) {
+            try {
+                return client.post()
+                        .uri("/v3/chat-completions/{model}", model)
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("X-NCP-CLOVASTUDIO-REQUEST-ID", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(body)
+                        .retrieve()
+                        .body(String.class);
+            } catch (HttpClientErrorException.TooManyRequests e) {
+                if (wait >= MAX_RATE_LIMIT_WAITS) throw e;
+                long ms = rateLimitWaitMs(e, RATE_LIMIT_BACKOFF_MS * (1L << wait));
+                log.warn("CLOVA 요청 한도 초과(429) - {}ms 뒤 재시도 ({}/{})", ms, wait + 1, MAX_RATE_LIMIT_WAITS);
+                Thread.sleep(ms);
+            }
+        }
+    }
+
+    private static final Pattern DURATION_PART = Pattern.compile("(\\d+(?:\\.\\d+)?)(ms|s|m|h)");
+
+    /**
+     * 429 응답 헤더(x-ratelimit-reset-tokens/requests: "29s", "1m5s", "500ms" 또는 Retry-After 초)가 알려 주는 만큼 기다린다.
+     * 이 키는 분당 요청 수뿐 아니라 분당 토큰 수(60,000) 한도가 있어서, 한도가 풀리는 시각을 따르는 것이 가장 빠르다.
+     * 헤더가 없거나 읽을 수 없으면 fallback.
+     */
+    static long rateLimitWaitMs(HttpClientErrorException e, long fallback) {
+        var h = e.getResponseHeaders();
+        if (h == null) return fallback;
+        long best = 0;
+        for (String name : List.of("x-ratelimit-reset-tokens", "x-ratelimit-reset-requests", "Retry-After")) {
+            String v = h.getFirst(name);
+            if (v != null) best = Math.max(best, parseDurationMs(v));
+        }
+        return best <= 0 ? fallback : Math.min(best + 500, 60_000);
+    }
+
+    static long parseDurationMs(String v) {
+        String t = v.trim();
+        if (t.matches("\\d+(\\.\\d+)?")) return (long) (Double.parseDouble(t) * 1000); // Retry-After: 초
+        Matcher m = DURATION_PART.matcher(t);
+        double ms = 0;
+        while (m.find()) {
+            double n = Double.parseDouble(m.group(1));
+            ms += switch (m.group(2)) {
+                case "ms" -> n;
+                case "s" -> n * 1000;
+                case "m" -> n * 60_000;
+                default -> n * 3_600_000;
+            };
+        }
+        return (long) ms;
+    }
+
     private String call(String keyword, SourceDocument doc, int count, List<String> avoid) throws Exception {
         String user = "주제 키워드: \"" + keyword + "\"\n\n"
                 + "[자료: " + doc.credit() + "]\n" + doc.text() + "\n[자료 끝]\n\n"
@@ -169,7 +228,7 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
         if (model.startsWith("HCX-007")) {
             // 추론 모델: maxTokens 대신 maxCompletionTokens, temperature/topK 미사용
             // 생각 토큰도 이 한도에 포함되므로 문제 수에 비례해 넉넉히 준다(부족하면 JSON이 잘린다).
-            body.put("maxCompletionTokens", Math.min(16000, 3000 + 800 * count));
+            body.put("maxCompletionTokens", Math.min(12000, 2500 + 600 * count));
             body.put("thinking", Map.of("effort", "low"));
         } else {
             body.put("maxTokens", Math.min(4096, 260 * count + 200));
@@ -177,14 +236,7 @@ public class ClovaQuestionGenerator implements QuestionGenerator {
             body.put("temperature", 0.3);
         }
 
-        String raw = client.post()
-                .uri("/v3/chat-completions/{model}", model)
-                .header("Authorization", "Bearer " + apiKey)
-                .header("X-NCP-CLOVASTUDIO-REQUEST-ID", UUID.randomUUID().toString())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(String.class);
+        String raw = post(body);
 
         JsonNode root = mapper.readTree(raw);
         String code = root.path("status").path("code").asText();
