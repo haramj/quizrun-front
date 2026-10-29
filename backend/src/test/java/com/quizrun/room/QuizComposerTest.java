@@ -264,4 +264,32 @@ class QuizComposerTest {
             assertThat(row.text).isEqualTo(quiz.questions().get(i).text());
         }
     }
+
+    @Test
+    void curatedKeywordUsesOnlyTheReviewedSetWithoutAiOrSources() throws Exception {
+        CuratedQuestions curated = new CuratedQuestions(new ObjectMapper());
+        InMemoryQuestionVault v = new InMemoryQuestionVault();
+        new QuestionSeeder(v, bank, curated).run(null);
+        QuizComposer c = new QuizComposer(v, sources, generator, bank, 0.3, curated);
+
+        for (String keyword : List.of("네이버 클라우드", "네이버클라우드", "NCP", "Naver Cloud")) {
+            assertThat(c.needsGeneration(keyword)).isFalse();
+            Quiz quiz = c.compose(keyword, 12);
+            assertThat(quiz.questions()).hasSize(12);
+            assertThat(quiz.source()).isEqualTo("bank");
+            assertThat(quiz.questions()).extracting(Question::text).doesNotContain("AI 문제");
+        }
+        assertThat(generator.calls).isZero();
+        assertThat(c.needsGeneration("손흥민")).isTrue();
+    }
+
+    @Test
+    void curatedSetIsAddedToAnExistingDatabaseButBaseSeedRunsOnlyOnce() throws Exception {
+        CuratedQuestions curated = new CuratedQuestions(new ObjectMapper());
+        new QuestionSeeder(vault, bank, curated).run(null); // vault는 이미 기본 문제로 채워져 있다
+        long afterFirst = vault.count();
+        new QuestionSeeder(vault, bank, curated).run(null);
+        assertThat(vault.count()).isEqualTo(afterFirst);
+        assertThat(vault.findActiveByTopic("네이버클라우드")).hasSize(15);
+    }
 }

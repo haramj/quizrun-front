@@ -11,6 +11,7 @@ import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -67,9 +68,16 @@ public class QuizComposer {
     private final QuestionGenerator generator;
     private final QuestionBank bank;
     private final double bankRatio;
+    private final CuratedQuestions curated;
 
+    QuizComposer(QuestionVault vault, SourceFinder sources, QuestionGenerator generator, QuestionBank bank, double bankRatio) {
+        this(vault, sources, generator, bank, bankRatio, CuratedQuestions.none());
+    }
+
+    @Autowired
     public QuizComposer(QuestionVault vault, SourceFinder sources, QuestionGenerator generator, QuestionBank bank,
-                        @Value("${quizrun.quiz.bank-ratio:0.3}") double bankRatio) {
+                        @Value("${quizrun.quiz.bank-ratio:0.3}") double bankRatio, CuratedQuestions curated) {
+        this.curated = curated;
         this.vault = vault;
         this.sources = sources;
         this.generator = generator;
@@ -82,12 +90,14 @@ public class QuizComposer {
      * RoomService가 느린 경로(백그라운드 준비)와 빠른 경로(바로 구성)를 고르는 데 쓴다.
      */
     public boolean needsGeneration(String keyword) {
-        return !QuestionBank.TOPICS.contains(keyword) && generator.enabled();
+        return !QuestionBank.TOPICS.contains(keyword) && curated.topicFor(keyword) == null && generator.enabled();
     }
 
     public Quiz compose(String keyword, int count) {
-        String topicKey = Texts.norm(keyword);
-        boolean category = QuestionBank.TOPICS.contains(keyword);
+        // 검수한 문제 세트가 있는 키워드는 내장 카테고리처럼 문제은행에서만 낸다(AI 생성 없음).
+        String curatedTopic = curated.topicFor(keyword);
+        String topicKey = curatedTopic != null ? curatedTopic : Texts.norm(keyword);
+        boolean category = curatedTopic != null || QuestionBank.TOPICS.contains(keyword);
 
         List<StoredQuestion> pool = new ArrayList<>(vault.findActiveByTopic(topicKey));
         Picked picked = new Picked();

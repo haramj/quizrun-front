@@ -1,0 +1,178 @@
+{
+ "keywords": [
+  "네이버클라우드",
+  "네이버클라우드플랫폼",
+  "ncp",
+  "navercloud",
+  "navercloudplatform"
+ ],
+ "topic": "네이버클라우드",
+ "title": "네이버 클라우드 플랫폼",
+ "questions": [
+  {
+   "text": "NCP VPC에서 사용할 수 있는 사설 IP 대역(RFC 1918)으로 옳지 않은 것은?",
+   "options": [
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "100.64.0.0/10"
+   ],
+   "answer": 3,
+   "evidence": "VPC는 RFC 1918 사설 대역(10/8, 172.16/12, 192.168/16)만 사용합니다."
+  },
+  {
+   "text": "ACG(Access Control Group)에 대한 설명으로 옳은 것은?",
+   "options": [
+    "서브넷 단위로 적용되며 Stateless이다.",
+    "서브넷 단위로 적용되며 Allow/Deny 규칙을 모두 설정할 수 있다.",
+    "서버(NIC) 단위로 적용되며 Stateful이고 Allow 규칙만 설정할 수 있다.",
+    "서버 단위로 적용되며 Stateless이고 Deny 규칙만 설정할 수 있다."
+   ],
+   "answer": 2,
+   "evidence": "ACG는 서버(NIC) 단위 Stateful 방화벽이며 Allow 규칙만 둡니다. 인바운드를 허용하면 응답은 자동 허용됩니다."
+  },
+  {
+   "text": "Network ACL의 특징으로 옳은 것은?",
+   "options": [
+    "서버 단위로 적용되며 Stateful이다.",
+    "서브넷 단위로 적용되며 Stateless이고 Allow/Deny 규칙을 모두 설정할 수 있다.",
+    "서브넷 단위로 적용되며 Stateful이고 Allow 규칙만 설정할 수 있다.",
+    "VPC 단위로 적용되며 Allow 규칙만 설정할 수 있다."
+   ],
+   "answer": 1,
+   "evidence": "Network ACL은 서브넷 단위 Stateless 방화벽이고 Allow와 Deny를 모두 지원합니다."
+  },
+  {
+   "text": "Private Subnet에 있는 서버가 외부 인터넷으로 나가는 아웃바운드 통신만 해야 할 때 사용하는 서비스는?",
+   "options": [
+    "Public IP",
+    "Load Balancer",
+    "CDN+",
+    "NAT Gateway"
+   ],
+   "answer": 3,
+   "evidence": "NAT Gateway는 Private Subnet 서버의 아웃바운드 인터넷 통신을 위한 서비스입니다."
+  },
+  {
+   "text": "다음 중 NCP Load Balancer 유형이 아닌 것은?",
+   "options": [
+    "Storage Load Balancer",
+    "Application Load Balancer",
+    "Network Load Balancer",
+    "Network Proxy Load Balancer"
+   ],
+   "answer": 0,
+   "evidence": "Application, Network, Network Proxy, Gateway 유형이 있으며 Storage Load Balancer는 없습니다."
+  },
+  {
+   "text": "Object Storage에 대한 설명으로 옳은 것은?",
+   "options": [
+    "서버에 직접 마운트해서 부팅 디스크로 사용한다.",
+    "관계형 데이터베이스 전용 저장소이다.",
+    "버킷 단위로 객체를 저장하며 S3 호환 API를 지원한다.",
+    "하나의 서버에만 연결할 수 있다."
+   ],
+   "answer": 2,
+   "evidence": "Object Storage는 버킷/객체 구조이며 S3 호환 API를 지원합니다."
+  },
+  {
+   "text": "트래픽이나 CPU 사용률 등에 따라 서버 수를 자동으로 늘리고 줄여주는 서비스는?",
+   "options": [
+    "Cloud Functions",
+    "Auto Scaling",
+    "Sub Account",
+    "Cloud Insight"
+   ],
+   "answer": 1,
+   "evidence": "Auto Scaling이 설정한 정책에 따라 서버 수를 자동으로 조절합니다."
+  },
+  {
+   "text": "서버 최초 부팅 시 자동으로 명령어를 실행해 환경을 구성하는 기능은?",
+   "options": [
+    "Snapshot",
+    "Login Key",
+    "Server Image",
+    "Init Script"
+   ],
+   "answer": 3,
+   "evidence": "Init Script는 서버 생성 후 최초 부팅 때 실행되는 스크립트입니다."
+  },
+  {
+   "text": "서버를 직접 운영하지 않고 이벤트에 반응하는 코드만 실행하는 서버리스 서비스는?",
+   "options": [
+    "Cloud Functions",
+    "Bare Metal Server",
+    "Block Storage",
+    "Cloud DB for MySQL"
+   ],
+   "answer": 0,
+   "evidence": "Cloud Functions는 FaaS(서버리스) 서비스입니다."
+  },
+  {
+   "text": "루트 계정 대신 권한을 제한해서 사용하는 IAM 성격의 사용자 계정 서비스는?",
+   "options": [
+    "Login Key",
+    "Certificate Manager",
+    "Sub Account",
+    "Cloud Activity Tracer"
+   ],
+   "answer": 2,
+   "evidence": "Sub Account는 루트 계정 대신 권한을 제한해 사용하는 계정입니다."
+  },
+  {
+   "text": "Block Storage(추가 스토리지)에 대한 설명으로 옳은 것은?",
+   "options": [
+    "서버와 반드시 동시에 생성하고 동시에 삭제해야 한다.",
+    "버킷 단위로 객체를 저장하며 S3 API로 접근한다.",
+    "서버 없이 HTTP로 직접 접근하는 정적 파일 저장소이다.",
+    "서버와 독립적으로 생성한 뒤 서버에 연결해서 사용한다."
+   ],
+   "answer": 3,
+   "evidence": "Block Storage는 서버와 별도로 생성하고 서버에 연결·분리할 수 있는 디스크입니다."
+  },
+  {
+   "text": "VPC 안의 Subnet과 Zone의 관계로 옳은 것은?",
+   "options": [
+    "하나의 Subnet이 여러 Region에 걸쳐 존재한다.",
+    "하나의 Subnet이 여러 Zone에 걸쳐 존재한다.",
+    "하나의 Subnet은 하나의 Zone에만 속한다.",
+    "Subnet은 Zone과 무관하게 생성된다."
+   ],
+   "answer": 2,
+   "evidence": "Subnet은 생성 시 지정한 하나의 Zone에만 속합니다."
+  },
+  {
+   "text": "서버에 SSH로 접속하거나 Windows 관리자 비밀번호를 확인할 때 사용하는 인증 정보는?",
+   "options": [
+    "Access Key",
+    "로그인 키(.pem)",
+    "Sub Account 비밀번호",
+    "ACG 키"
+   ],
+   "answer": 1,
+   "evidence": "서버 생성 시 발급받는 로그인 키(.pem)로 SSH 접속 및 Windows 관리자 비밀번호 확인을 합니다."
+  },
+  {
+   "text": "서로 물리적으로 분리된 데이터센터 단위로, 여러 개에 분산 배치하면 가용성이 높아지는 NCP 구성 단위(예: KR-1, KR-2)는?",
+   "options": [
+    "Zone",
+    "VPC",
+    "Subnet",
+    "ACG"
+   ],
+   "answer": 0,
+   "evidence": "Region 안의 Zone을 분산해 구성하면 장애에 대비한 고가용성을 확보할 수 있습니다."
+  },
+  {
+   "text": "인터넷에서 VPC 안의 서버로 직접 접속하려면 서버에 연결해야 하는 것은?",
+   "options": [
+    "ACG",
+    "Network ACL",
+    "Public IP",
+    "NAT Gateway"
+   ],
+   "answer": 2,
+   "evidence": "Public IP를 서버에 연결해야 인터넷에서 직접 접근할 수 있습니다. NAT Gateway는 아웃바운드 전용입니다."
+  }
+ ]
+}
