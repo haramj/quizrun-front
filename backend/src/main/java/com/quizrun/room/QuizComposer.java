@@ -35,6 +35,9 @@ public class QuizComposer {
     /** questionIds는 questions와 같은 순서이며, 문제은행에 없는 문제(내장 폴백)는 null이다. 신고할 때 쓴다. */
     public record Quiz(List<Question> questions, String source, String topic, List<String> credits, List<Long> questionIds) {}
 
+    /** 목표 문제 수를 채우려고 생성을 다시 시도하는 최대 횟수. */
+    private static final int MAX_ROUNDS = 4;
+
     private enum Failure { NONE, NO_SOURCE, GENERATION_FAILED }
 
     /**
@@ -44,7 +47,6 @@ public class QuizComposer {
     private static final class Picked {
         private final Set<String> hashes = new HashSet<>();
         private final Set<String> facts = new HashSet<>();
-
         boolean accept(StoredQuestion q) {
             String fact = factOf(q);
             if (hashes.contains(q.textHash) || (fact != null && facts.contains(fact))) return false;
@@ -100,8 +102,13 @@ public class QuizComposer {
             Optional<SourceDocument> doc = sources.find(keyword);
             if (doc.isEmpty()) {
                 failure = Failure.NO_SOURCE;
-            } else if (!generateInto(keyword, topicKey, doc.get(), need, fresh, picked)) {
-                failure = Failure.GENERATION_FAILED;
+            } else {
+                // 중복·기존 문제 제거로 모자라면 목표를 채울 때까지 부족분만 다시 만든다.
+                boolean anyOk = false;
+                for (int round = 0; round < MAX_ROUNDS && fresh.size() < need; round++) {
+                    anyOk |= generateInto(keyword, topicKey, doc.get(), need - fresh.size(), fresh, picked);
+                }
+                if (!anyOk) failure = Failure.GENERATION_FAILED;
             }
         }
 
@@ -148,7 +155,12 @@ public class QuizComposer {
                                  List<StoredQuestion> fresh, Picked picked) {
         // 검증에서 탈락하는 문제가 있으므로 넉넉히 요청한다. 남는 문제는 DB에 쌓인다.
         int request = Math.min(12, (int) Math.ceil(need * 1.5) + 1);
-        Optional<List<GeneratedQuestion>> generated = generator.generate(keyword, doc, request, need);
+        // 이미 가진 문제 본문을 알려 주어 모델이 자료의 다른 사실로 출제하게 한다.
+        List<String> avoid = new ArrayList<>();
+        for (StoredQuestion q : vault.findAllByTopic(topicKey)) avoid.add(q.text);
+        for (StoredQuestion q : fresh) avoid.add(q.text);
+        if (avoid.size() > 30) avoid = new ArrayList<>(avoid.subList(avoid.size() - 30, avoid.size()));
+        Optional<List<GeneratedQuestion>> generated = generator.generate(keyword, doc, request, Math.min(request, need + 2), avoid);
         if (generated.isEmpty()) return false;
 
         // 비활성(신고로 제외된) 문제의 사실도 포함한다: 같은 오답을 새 문제로 되살리지 않기 위해서다.

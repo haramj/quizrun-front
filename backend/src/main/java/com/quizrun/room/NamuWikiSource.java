@@ -22,7 +22,7 @@ import org.springframework.web.client.RestClient;
 @Component
 public class NamuWikiSource {
 
-    static final int MAX_CHARS = 6000;
+    static final int MAX_CHARS = 12000;
     private static final Pattern TAIL = Pattern.compile("(관련 문서|둘러보기)");
 
     private final RestClient client;

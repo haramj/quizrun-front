@@ -77,4 +77,4 @@ quizrun:
     wikipedia-url: https://ko.wikipedia.org
     namu-enabled: true
     namu-url: https://namu.wiki
-    thin-chars: 2500
+    thin-chars: 6000
